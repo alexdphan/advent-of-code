@@ -1,0 +1,13 @@
+# Cargo.toml is the manifest file for Rust's package manager, cargo. This file contains metadata such as name, version, and dependencies for packages, which are call "crates" in Rust.
+
+# rust doesn't use "-" in package names, so we use "_" when we use it instead
+
+[package]
+name = "day-03"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
