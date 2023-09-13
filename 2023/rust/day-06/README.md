@@ -20,3 +20,4 @@ Command | Description
 `cargo test` | Runs the Rust project's tests
 `mkdir bin` | Creates a new directory named `bin`
 `source "$HOME/.cargo/env"` | (in .zshrc, might not be needed)
+`cargo test -- --nocapture` | Runs the Rust project's tests, and shows the output of the tests (even if they pass)

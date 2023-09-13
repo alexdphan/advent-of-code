@@ -11,12 +11,16 @@ pub fn process_part1(input: &str) -> String {
     let sequence = chars
         .windows(window_size)
         .enumerate()
-        // _i is the index of the element, slice is the slice of the vector (which would be a window of size 4)
-        // we are using (_i, slice) because enumerate() returns a tuple (index, slice
+        // _i is the index of the element
+        // the _ means that we don't care about the value of the index
+        // slice is the slice of the vector (which would be a window of size 4)
+        // slice comes in as an array of chars, so we later have to convert it to a BTreeSet of chars
+        // we are using (_i, slice) because enumerate() returns a tuple (index, slice, so we have to keep the tuple structure)
         .find(|(_i, slice)| {
             // HashSet is a data structure that only stores unique values (Hash Set)
             // BTreeset is a data structure that only stores unique values, but it also keeps them sorted (Binary Tree Set)
             // example: [a, b, c, d, e, f, g, h, i, j, k, l, m, n]
+            // iter is important because we want to iterate over the slice and collect the values that are in the slice, which are unique and sorted
             let set = slice.iter().collect::<BTreeSet<&char>>();
             // if the length of the slice is equal to the length of the set, it means that all the elements of the slice are unique
             slice.len() == set.len()
@@ -36,6 +40,12 @@ pub fn process_part2(input: &str) -> String {
     let sequence = chars
         .windows(window_size)
         .enumerate()
+        // this is inspecting the value of the slice, which is an array of chars (the value of the slice would show regardless if errors and debug are enabled)
+        // can inspect (only if errors and debug are enabled) to see what is happening
+        // if you want to see this if code is complete, you can run `cargo test -- --nocapture`
+        // .inspect(|v| {
+        //     dbg!(v);
+        // })
         .find(|(_i, slice)| {
             let set = slice.iter().collect::<BTreeSet<&char>>();
             slice.len() == set.len()
