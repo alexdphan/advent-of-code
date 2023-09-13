@@ -87,6 +87,7 @@ fn line(input: &str) -> IResult<&str, (RangeInclusive<u32>, RangeInclusive<u32>)
     // this is the parser that is applied second, which is sections again in this case
 
     // reffering to the input, we want to parse a pair of ranges, separated by a comma
+    // Gets an object from the first parser, then matches an object from the sep_parser and discards it, then gets another object from the second parser.
     let (input, (start, end)) = separated_pair(sections, tag(","), sections)(input)?;
     Ok((input, (start, end)))
 }
