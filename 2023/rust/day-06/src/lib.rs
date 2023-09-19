@@ -69,7 +69,6 @@ mod tests {
 
     #[test]
     fn part2_works() {
-        //qmgbljsphdztnv
         assert_eq!(process_part2("mjqjpqmgbljsphdztnvjfqwrcgsmlb"), "19");
         assert_eq!(process_part2("bvwbjplbgvbhsrlpgdmjqwftvncz"), "23");
         assert_eq!(process_part2("nppdvjthqldpwncqszvftbrmjlhg"), "23");
