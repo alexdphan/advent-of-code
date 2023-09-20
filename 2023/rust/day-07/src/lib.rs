@@ -197,13 +197,18 @@ fn calculate_sizes<'a>(
                 .sum::<u32>();
 
             // Update the sizes map for all segments of the current path.
+            // for example, if you have directory b inside directory a, then you would have ["", "a", "b"] for the context because you would have to go to the root directory, then go to directory a, then go to directory b
+            // going from 0 to the length of the context (which is the number of directories in the context)
             for i in 0..context.len() {
-                // sizes is a BTreeMap<Vec<&str>, u32>
+                // sizes is a BTreeMap<Vec<&str>, u32> that we will use in this fold() function
                 sizes
                     // entry() returns an Entry which is an enum that represents a value that might or might not exist in the map
                     // Gets the given key's corresponding entry in the map for in-place manipulation.
                     .entry(context[0..=i].to_vec())
                     // and_modify() modifies an existing entry
+                    // 0 to 0 would be the root directory
+                    // 0 to 1 would be the root directory plus the first directory
+                    // 0 to 2 would be the root directory plus the first directory plus the second directory, etc.
                     .and_modify(|v| *v += sum)
                     // or_insert() inserts a new entry if the key doesn't exist
                     .or_insert(sum);

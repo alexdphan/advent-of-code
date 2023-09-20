@@ -1,0 +1,1 @@
+fn(_, _) -> impl FnMut(_) -> Result<(_, Vec<_>), nom::Err<_>> {separated_list1::<_, _, _, _, _, _>}
