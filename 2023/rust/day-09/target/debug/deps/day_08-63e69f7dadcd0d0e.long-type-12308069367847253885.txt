@@ -1,0 +1,1 @@
+impl FnMut(&str) -> Result<(&str, Vec<std::iter::Map<Chars<'_>, [closure@src/lib.rs:10:22: 10:27]>>), nom::Err<_>>

@@ -118,6 +118,7 @@ pub fn process_part2(input: &str) -> String {
 
     // iterate over the trees
     for (y_index, tree_line) in trees.iter().enumerate() {
+        // for each tree (the x_index and the treehouse_height), we need to compare it to the trees around it
         for (x_index, treehouse_height) in tree_line.iter().enumerate() {
             // initialize scores to 0
             let mut scores = [0, 0, 0, 0];
@@ -132,6 +133,7 @@ pub fn process_part2(input: &str) -> String {
 
             // right to left
             for x_position in (0..x_index).rev() {
+                // If any of the trees at the current `y_index` and `x_position` (the right to left position) are less than the `treehouse_height`, add 1 to the score. Otherwise, add 1 to the score and break out of the loop.
                 if trees[y_index][x_position] < *treehouse_height {
                     scores[0] += 1;
                 } else {
