@@ -20,19 +20,28 @@ struct Computer {
 }
 
 impl Display for Computer {
+    // this function takes in a reference to self and a reference to a Formatter(from std::fmt) and returns a Result
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // write!() takes in a reference to a Formatter and a string and returns a Result
+        // f: &mut std::fmt::Formatter<'_> means that f is a mutable reference to a Formatter
+        // self.pixels.chars() returns an iterator over the characters in self.pixels
         write!(
             f,
             "{}",
             self.pixels
+                // .chars() returns an iterator over the characters in self.pixels
                 .chars()
+                // .chunks(40) returns an iterator over chunks of 40 characters (meaning that each chunk is a line, since each line is 40 characters long)
                 .chunks(40)
+                // .into_iter() converts the iterator into an iterator that owns its contents
                 .into_iter()
+                // .map() takes in a closure and returns an iterator that applies the closure to each element
                 .map(|chunk| chunk.collect::<String>())
                 .join("\n")
         )
     }
 }
+
 impl Computer {
     fn new() -> Self {
         Computer {
@@ -44,15 +53,12 @@ impl Computer {
     fn sprite_range(&self) -> RangeInclusive<i32> {
         (self.x - 1)..=(self.x + 1)
     }
-
     // this function takes in a reference to an instruction and returns nothing
     // &mut self means that the function takes in a mutable reference to self
     fn interpret(&mut self, instruction: &Instruction) {
         for _ in 0..instruction.cycles() {
-
             // start_cycle() returns a Cycle struct
             let cycle_guard = self.start_cycle();
-
             // if the sprite_range contains the pixel, push a #, otherwise push a .
             if cycle_guard
                 .computer
@@ -64,7 +70,6 @@ impl Computer {
                 cycle_guard.computer.pixels.push_str(".");
             }
         }
-
         // match the instruction and do the appropriate action
         match instruction {
             Noop => {}
@@ -135,16 +140,13 @@ pub fn process_part1(input: &str) -> String {
     let mut x: i32 = 1;
     // using u32 because we know the result will be small enough to fit in a u32
     let mut cycles: u32 = 0;
-
     for instruction in instructions.iter() {
         if notable_cycles.contains(&(cycles + 1)) {
             scores.insert(cycles + 1, (cycles as i32 + 1) * x);
         }
-
         if notable_cycles.contains(&(cycles + 2)) {
             scores.insert(cycles + 2, (cycles as i32 + 2) * x);
         }
-
         cycles += instruction.cycles();
         match instruction {
             Noop => {}
@@ -164,19 +166,18 @@ pub fn process_part1(input: &str) -> String {
 pub fn process_part2(input: &str) -> String {
     // parse the input into a Vec of Instructions
     let (_, instructions) = instruction_set(input).unwrap();
-
     // assigning computer to the result of the fold function (which is a Computer that takes in a computer and an instruction and returns a computer)
     let computer = instructions
         .iter()
-        // we used fold() to iterate over the instructions and return a Computer
-        // Computer::new() is the initial value of the computer
-        // |mut computer, instruction| is the function that takes in the computer and the instruction
+        // we use fold() to iterate over the instructions and accumulate the result into a Computer.
+        // Computer::new() serves as the initial value for the accumulator (i.e., the computer)
         .fold(Computer::new(), |mut computer, instruction| {
-            // interpret the instruction (with interpret()) and return the computer
+            // interpret() updates the state of the computer based on the current instruction
             computer.interpret(instruction);
+            // The updated computer is returned for the next iteration
             computer
         });
-    // println!("{}", computer);
+    // computer.to_string() would produce a string representation of the computer's final state
     computer.to_string()
 }
 
