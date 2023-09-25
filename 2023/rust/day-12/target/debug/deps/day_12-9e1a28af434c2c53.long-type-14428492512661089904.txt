@@ -1,0 +1,1 @@
+std::iter::FlatMap<itertools::Product<std::ops::Range<i32>, std::ops::Range<i32>>, (), [closure@src/lib.rs:32:19: 32:27]>

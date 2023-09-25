@@ -1,0 +1,1 @@
+std::iter::Map<std::slice::Iter<'_, Vec<char>>, [closure@src/lib.rs:35:10: 35:15]>
