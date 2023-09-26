@@ -8,7 +8,7 @@ manifest for Rust's package manager. This file contains all the metadata for the
 
 Command | Description
 --- | ---
-`cargo new day-11` | Creates a new Rust project called day-01 (or do the comman below)
+`cargo new day-12` | Creates a new Rust project called day-01 (or do the comman below)
 `cp -day-11 day-12` | Changes the current directory to the day-01 folder
 `cargo build` | Builds the Rust project
 `cargo run` | Runs the Rust project

@@ -15,10 +15,7 @@ enum Value {
     Num(u64),
 }
 impl Display for Value {
-    fn fmt(
-        &self,
-        f: &mut std::fmt::Formatter<'_>,
-    ) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
             "{}",
@@ -50,11 +47,7 @@ struct Monkey {
 }
 
 impl Monkey {
-    fn inspect(
-        &mut self,
-        relief_lowers_worry_level: bool,
-        magic_trick: u64,
-    ) -> u64 {
+    fn inspect(&mut self, relief_lowers_worry_level: bool, magic_trick: u64) -> u64 {
         self.touch_count += 1;
         let item = self.items.pop_front().unwrap();
         // println!("  Monkey inspects an item with a worry level of {item}.");
@@ -108,18 +101,13 @@ impl Monkey {
 fn value(input: &str) -> IResult<&str, Value> {
     alt((
         tag("old").map(|_| Value::Old),
-        nom::character::complete::u64
-            .map(|num| Value::Num(num)),
+        nom::character::complete::u64.map(|num| Value::Num(num)),
     ))(input)
 }
 fn operation(input: &str) -> IResult<&str, Operation> {
     let (input, _) = tag("Operation: new = ")(input)?;
     let (input, value_1) = value(input)?;
-    let (input, operator) = delimited(
-        multispace1,
-        alt((tag("*"), tag("+"))),
-        multispace1,
-    )(input)?;
+    let (input, operator) = delimited(multispace1, alt((tag("*"), tag("+"))), multispace1)(input)?;
     let (input, value_2) = value(input)?;
 
     let result = match operator {
@@ -131,10 +119,8 @@ fn operation(input: &str) -> IResult<&str, Operation> {
 }
 
 fn test(input: &str) -> IResult<&str, Test> {
-    let (input, divisible) = preceded(
-        tag("Test: divisible by "),
-        nom::character::complete::u64,
-    )(input)?;
+    let (input, divisible) =
+        preceded(tag("Test: divisible by "), nom::character::complete::u64)(input)?;
     let (input, _) = multispace1(input)?;
     let (input, true_recipient) = preceded(
         tag("If true: throw to monkey "),
@@ -155,18 +141,11 @@ fn test(input: &str) -> IResult<&str, Test> {
     ))
 }
 fn monkey(input: &str) -> IResult<&str, Monkey> {
-    let (input, _id) = delimited(
-        tag("Monkey "),
-        nom::character::complete::u64,
-        tag(":"),
-    )(input)?;
+    let (input, _id) = delimited(tag("Monkey "), nom::character::complete::u64, tag(":"))(input)?;
     let (input, _) = multispace1(input)?;
     let (input, items) = preceded(
         tag("Starting items: "),
-        separated_list1(
-            tag(", "),
-            nom::character::complete::u64,
-        ),
+        separated_list1(tag(", "), nom::character::complete::u64),
     )(input)?;
     let (input, _) = multispace1(input)?;
     let (input, op) = operation(input)?;
@@ -192,9 +171,7 @@ fn monkey(input: &str) -> IResult<&str, Monkey> {
 //     Current worry level is not divisible by 23.
 //     Item with worry level 500 is thrown to monkey 3.
 pub fn process_part1(input: &str) -> String {
-    let (_, mut monkeys) =
-        separated_list1(tag("\n\n"), monkey)(input)
-            .unwrap();
+    let (_, mut monkeys) = separated_list1(tag("\n\n"), monkey)(input).unwrap();
     let magic_trick = monkeys
         .iter()
         .map(|monkey| monkey.test.divisible)
@@ -203,10 +180,8 @@ pub fn process_part1(input: &str) -> String {
         for monkey_index in 0..monkeys.len() {
             // println!("Monkey {monkey_index}:");
             for _ in 0..monkeys[monkey_index].items.len() {
-                let monkey =
-                    monkeys.get_mut(monkey_index).unwrap();
-                let item =
-                    monkey.inspect(true, magic_trick);
+                let monkey = monkeys.get_mut(monkey_index).unwrap();
+                let item = monkey.inspect(true, magic_trick);
                 let monkey_to_send_to = monkey.test(item);
                 // println!("    Item with worry level {item} is thrown to monkey {monkey_to_send_to}.");
                 monkeys
@@ -228,9 +203,7 @@ pub fn process_part1(input: &str) -> String {
 }
 
 pub fn process_part2(input: &str) -> String {
-    let (input, mut monkeys) =
-        separated_list1(tag("\n\n"), monkey)(input)
-            .unwrap();
+    let (input, mut monkeys) = separated_list1(tag("\n\n"), monkey)(input).unwrap();
     let magic_trick = monkeys
         .iter()
         .map(|monkey| monkey.test.divisible)
@@ -240,10 +213,8 @@ pub fn process_part2(input: &str) -> String {
         for monkey_index in 0..monkeys.len() {
             // println!("Monkey {monkey_index}:");
             for _ in 0..monkeys[monkey_index].items.len() {
-                let monkey =
-                    monkeys.get_mut(monkey_index).unwrap();
-                let item =
-                    monkey.inspect(false, magic_trick);
+                let monkey = monkeys.get_mut(monkey_index).unwrap();
+                let item = monkey.inspect(false, magic_trick);
                 let monkey_to_send_to = monkey.test(item);
                 // println!("    Item with worry level {item} is thrown to monkey {monkey_to_send_to}.");
                 monkeys
