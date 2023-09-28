@@ -1,55 +1,79 @@
-use std::collections::BTreeMap;
-
 use itertools::Itertools;
-
 use nom::{
     bytes::complete::tag,
-    character::complete::{self, line_ending},
+    character::complete,
+    character::complete::line_ending,
     multi::separated_list1,
     sequence::{preceded, separated_pair},
-    IResult, Parser,
+    *,
+};
+use std::{
+    collections::BTreeMap,
+    ops::{Range, RangeInclusive},
 };
 
-use rayon::prelude::*;
-
-// need Ord to be able to use BTreeMap
-// need PartialOrd to be able to use BTreeSet
-// need Eq and PartialEq to be able to use BTreeSet
 #[derive(Ord, PartialOrd, Eq, PartialEq, Debug)]
 struct Sensor {
-    x: i32,
-    y: i32,
+    x: i64,
+    y: i64,
+}
+
+impl Sensor {
+    fn distance_to_beacon(&self, beacon: &Beacon) -> i64 {
+        (beacon.x - self.x).abs() + (beacon.y - self.y).abs()
+    }
+    fn y_range(&self, max_distance: i64) -> Range<i64> {
+        (self.y - max_distance)..(self.y + max_distance)
+    }
+    /// check whether a given y-index is reachable by
+    /// the given sensor
+    fn covers(&self, distance: i64, y_index: i64) -> bool {
+        let sensor_range = self.y_range(distance);
+        sensor_range.contains(&y_index)
+    }
+    /// returns a range of the x values, centered on the
+    /// sensor's x position, that the sensor can sense
+    /// at the target y index
+    fn x_coverage_at_y(&self, max_distance: i64, target_y_index: i64) -> RangeInclusive<i64> {
+        let distance_to_line = self.y - target_y_index;
+
+        let max_distance_on_line = max_distance - distance_to_line.abs();
+
+        (self.x - max_distance_on_line)..=self.x + max_distance_on_line
+    }
+    fn coverage_in_x_ranges(&self, max_distance: i64) -> Vec<(i64, RangeInclusive<i64>)> {
+        self.y_range(max_distance)
+            .map(|y| {
+                let x_range = self.x_coverage_at_y(max_distance, y);
+                (y, x_range)
+            })
+            .collect()
+    }
 }
 
 // need Debug to be able to use dbg!
 #[derive(Debug, PartialEq)]
 struct Beacon {
-    x: i32,
-    y: i32,
+    x: i64,
+    y: i64,
 }
 
 // this function parses the input into the position of the sensors, which is a pair of i32
-fn position(input: &str) -> IResult<&str, (i32, i32)> {
+fn position(input: &str) -> IResult<&str, (i64, i64)> {
     separated_pair(
-        preceded(tag("x="), complete::i32),
+        preceded(tag("x="), complete::i64),
         tag(", "),
-        preceded(tag("y="), complete::i32),
+        preceded(tag("y="), complete::i64),
     )(input)
 }
-
-// this function parses the input into a BTreeMap of sensors and their closest beacon
-// a BTreeMap is a map that is sorted by key, in this case the key is the sensor
-// we could just use tuples instead of just BTreeMap but it is easier to read and understand
 fn map(input: &str) -> IResult<&str, BTreeMap<Sensor, Beacon>> {
     let (input, list) = separated_list1(
         line_ending,
         preceded(
             tag("Sensor at "),
             separated_pair(
-                // maps the input into a Sensor struct of the x and y coordinates
                 position.map(|(x, y)| Sensor { x, y }),
                 tag(": closest beacon is at "),
-                // maps the input into a Beacon struct of the x and y coordinates
                 position.map(|(x, y)| Beacon { x, y }),
             ),
         ),
@@ -57,137 +81,83 @@ fn map(input: &str) -> IResult<&str, BTreeMap<Sensor, Beacon>> {
 
     Ok((
         input,
-        // use into_iter to be able to collect into a BTreeMap over iter() because iter() returns a reference, not owned values
         list.into_iter().collect::<BTreeMap<Sensor, Beacon>>(),
     ))
 }
 
+fn merge_ranges(
+    mut acc: (RangeInclusive<i64>, Option<i64>),
+    range: &RangeInclusive<i64>,
+) -> (RangeInclusive<i64>, Option<i64>) {
+    if acc.1.is_some() {
+        return acc;
+    }
+    if acc.0.end() + 1 >= *range.start() {
+        acc.0 = *acc.0.start()..=(*acc.0.end().max(range.end()));
+    } else {
+        acc.1 = Some(acc.0.end() + 1);
+    }
+
+    acc
+}
+
 // takes in a &str and line_number and returns a String
 // the line_number is the y coordinate of the line we want to check
-pub fn process_part1(input: &str, line_number: i32) -> String {
-    // parse the input into a BTreeMap of sensors and their closest beacon
-    // we assign map to the BTreeMap because we want to use it later
+pub fn process_part1(input: &str, line_number: i64) -> String {
     let (_, map) = map(input).unwrap();
-    // assign distances to an i32
-    // distances is a BTreeMap of a reference to a Sensor (from the map function) and an i32
-    let distances: BTreeMap<&Sensor, i32> = map
-        .iter()
-        // map the tuple of (sensor, beacon) to (sensor, distance) which is the absolute value of the difference between the x and y coordinates of the sensor and beacon (manhattan distance)
-        .map(|(sensor, beacon)| {
-            (
-                sensor,
-                ((beacon.x - sensor.x).abs() + (beacon.y - sensor.y).abs()),
-            )
+    map.iter()
+        .filter_map(|(sensor, closest_beacon)| {
+            let distance = sensor.distance_to_beacon(closest_beacon);
+            if sensor.covers(distance, line_number) {
+                Some(sensor.x_coverage_at_y(distance, line_number))
+            } else {
+                None
+            }
         })
-        // collect into a BTreeMap
-        .collect();
-    // let line_number = 10;
-
-    // x_positions is a Vec<i32> of the x coordinates of the positions on the line that are not blocked by a beacon
-    // distances
-    let x_positions = distances
-        .iter()
-        // filters the sensor, distance tuple to only the sensors that are on the line (taking in a closure from the distances BTreeMap)
-        .filter(|(sensor, distance)| {
-            // we double dereference the distance because it is a reference to a reference
-            let sensor_range = (sensor.y - **distance)..=(sensor.y + **distance);
-            sensor_range.contains(&line_number)
-        })
-        // we flat_map the sensor, distance tuple to the x coordinates of the positions on the line that are not blocked by a beacon (taking in a closure from the distances BTreeMap)
-        .flat_map(|(sensor, max_distance)| {
-            // let width = distance * 2 + 1;
-            // sensor.y is the y coordinate of the sensor
-            let distance_to_line = sensor.y - line_number;
-            // let direction_to_line = distance_to_line.signum();
-
-            // assign max_distance_on_line to the max_distance minus the distance to the line (absolute value)
-            let max_distance_on_line = max_distance - distance_to_line.abs();
-
-            // this is the range of x coordinates that are not blocked by a beacon
-            // sensor.x is the x coordinate of the sensor
-            // here, we set the range to be the x coordinate of the sensor minus the max_distance_on_line to the x coordinate of the sensor plus the max_distance_on_line
-            (sensor.x - max_distance_on_line)..=sensor.x + max_distance_on_line
-        })
-        // unique() returns an iterator yielding only the unique elements from the iterator (in this case, the x coordinates) (from itertools)
-        // we need this to use filter() because filter() only works on iterators
+        .flatten()
         .unique()
         .filter(|x| {
-            // we use ! to negate the contains function because we want to filter out the x coordinates that are not in the map
-            // we use &Beacon to get a reference to the Beacon because the map is a BTreeMap<&Sensor, Beacon> (code above)
             !map.values().contains(&Beacon {
-                // we use *x to dereference the x because it is a reference
                 x: *x,
                 y: line_number,
             })
         })
-        .collect::<Vec<i32>>();
-    x_positions.len().to_string()
-    // could just write this instead as well
-    // count()
-    // to_string()
+        .count()
+        .to_string()
 }
 
 // distance calculate for all the sensors at least
 // distance calculate for every point
-pub fn process_part2(input: &str, limit: i32) -> String {
-    // (beacon.x * 4_000_000 + beacon.y).to_string()
+pub fn process_part2(input: &str, limit: i64) -> String {
     let (_, map) = map(input).unwrap();
-    let distances: BTreeMap<&Sensor, i32> = map
+    let ranges_by_y_index: BTreeMap<i64, Vec<RangeInclusive<i64>>> = map
         .iter()
-        .map(|(sensor, beacon)| {
-            (
-                sensor,
-                (beacon.x - sensor.x).abs() + (beacon.y - sensor.y).abs(),
-            )
+        .flat_map(|(sensor, closest_beacon)| {
+            let max_distance = sensor.distance_to_beacon(closest_beacon);
+            let ranges = sensor.coverage_in_x_ranges(max_distance);
+            ranges
+                .into_iter()
+                .map(|(y, range)| (y, *range.start().max(&0)..=*range.end().min(&limit)))
         })
-        .collect();
-    // assigning possible_beacon_location to a
-    let possible_beacon_location = (0..=limit)
-        .cartesian_product(0..=limit)
-        // Creates a bridge from this type to a ParallelIterator.
-        // This is useful to be able to chain together sequential operations with parallel ones.
-        // A bridge is a special kind of iterator that is lazy and can be split into parallel tasks and executed in parallel.
-        // A ParallelIterator is a lazy iterator that can process items in parallel.
-        .par_bridge()
-        .find(|(y, x)| {
-            if y < &0 || x < &0 || y > &limit || x > &limit {
-                return false;
-            }
-            // if it's a beacon, then it's not a possible beacon location
-            let is_beacon = map.values().contains(&Beacon { x: *x, y: *y });
-            if is_beacon {
-                return false;
-            }
-            // doing all of our distances, which are the sensors and their distances that they can reach
-            // we are filtering out the sensors that are not in range of the y coordinate
-            let is_sensed = distances
-                .iter()
-                // using a closure of |(sensor, distance)| to filter out the sensors that are not in range of the y coordinate
-                .filter(|(sensor, distance)| {
-                    // assigning sensor_range to a range of the y coordinate of the sensor minus the distance to the y coordinate of the sensor plus the distance
-                    let sensor_range = (sensor.y - **distance)..(sensor.y + **distance);
-                    // filtering out anything that isn't in range of y (anything that is not in the range of the sensor)
-                    sensor_range.contains(&y)
-                })
-                .find(|(sensor, max_distance)| {
-                    // let width = distance * 2 + 1;
-                    let distance_to_line = sensor.y - y;
-
-                    let max_distance_on_line = **max_distance - distance_to_line.abs();
-
-                    let sensor_range =
-                        (sensor.x - max_distance_on_line)..(sensor.x + max_distance_on_line);
-                    sensor_range.contains(x)
-                });
-            // if position is not sensed by sensor
-            // then we get possible beacon location
-            // if it is sensed by sensor, then we don't get possible beacon location (is_none())
-            is_sensed.is_none()
+        .filter(|(y, _)| y >= &0 && y <= &limit)
+        .fold(BTreeMap::new(), |mut acc, (y, range)| {
+            acc.entry(y)
+                .and_modify(|ranges| ranges.push(range.clone()))
+                .or_insert(vec![range]);
+            acc
         });
-    let Some(beacon) = possible_beacon_location else {
-        panic!("noooo")
-    };
-    (beacon.1 * 4000000 + beacon.0).to_string()
+
+    let (x, y) = ranges_by_y_index
+        .into_iter()
+        .find_map(|(y_index, mut ranges)| {
+            ranges.sort_by(|a, b| a.start().cmp(b.start()));
+            let result: (RangeInclusive<i64>, Option<i64>) =
+                ranges.iter().fold((0..=0, None), merge_ranges);
+            result.1.map(|x| (x, y_index))
+        })
+        .unwrap();
+
+    (x * 4000000 + y).to_string()
 }
 
 #[cfg(test)]
@@ -219,5 +189,3 @@ Sensor at x=20, y=1: closest beacon is at x=15, y=3";
         assert_eq!(process_part2(INPUT, 20), "56000011");
     }
 }
-
-// this version has takes too long to run since it has about 16 trillion calculations
