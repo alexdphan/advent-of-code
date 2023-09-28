@@ -12,6 +12,7 @@ use std::{
     ops::{Range, RangeInclusive},
 };
 
+// we use i64 because it can handle much larger numbers than i32 before overflowing
 #[derive(Ord, PartialOrd, Eq, PartialEq, Debug)]
 struct Sensor {
     x: i64,
@@ -85,6 +86,8 @@ fn map(input: &str) -> IResult<&str, BTreeMap<Sensor, Beacon>> {
     ))
 }
 
+// merge_ranges takes in an accumulator and a range and returns an accumulator
+// this function is used to merge the ranges of the sensors 
 fn merge_ranges(
     mut acc: (RangeInclusive<i64>, Option<i64>),
     range: &RangeInclusive<i64>,
@@ -130,6 +133,7 @@ pub fn process_part1(input: &str, line_number: i64) -> String {
 // distance calculate for every point
 pub fn process_part2(input: &str, limit: i64) -> String {
     let (_, map) = map(input).unwrap();
+    // assign ranges to y index to a BTreeMap of i64 to Vec<RangeInclusive<i64>>
     let ranges_by_y_index: BTreeMap<i64, Vec<RangeInclusive<i64>>> = map
         .iter()
         .flat_map(|(sensor, closest_beacon)| {
@@ -147,6 +151,7 @@ pub fn process_part2(input: &str, limit: i64) -> String {
             acc
         });
 
+    // have (x, y) be assigned to t
     let (x, y) = ranges_by_y_index
         .into_iter()
         .find_map(|(y_index, mut ranges)| {
@@ -189,3 +194,4 @@ Sensor at x=20, y=1: closest beacon is at x=15, y=3";
         assert_eq!(process_part2(INPUT, 20), "56000011");
     }
 }
+
