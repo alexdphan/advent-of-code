@@ -219,3 +219,5 @@ Sensor at x=20, y=1: closest beacon is at x=15, y=3";
         assert_eq!(process_part2(INPUT, 20), "56000011");
     }
 }
+
+// this version has takes too long to run since it has about 16 trillion calculations
