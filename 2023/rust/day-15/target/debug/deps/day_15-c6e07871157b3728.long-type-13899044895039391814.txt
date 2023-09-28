@@ -1,0 +1,1 @@
+Flatten<Filter<Inspect<std::iter::FlatMap<Filter<std::collections::btree_map::Iter<'_, &Sensor, i32>, [closure@src/lib.rs:72:17: 72:37]>, RangeInclusive<i32>, [closure@src/lib.rs:76:19: 76:43]>, [closure@src/lib.rs:85:18: 85:25]>, [closure@src/lib.rs:88:17: 88:20]>>

@@ -1,0 +1,1 @@
+std::iter::Map<std::collections::btree_map::Iter<'_, Sensor, Beacon>, [closure@src/lib.rs:133:60: 133:78]>
