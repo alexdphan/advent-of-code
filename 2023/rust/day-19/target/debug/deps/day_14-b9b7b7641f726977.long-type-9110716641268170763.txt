@@ -1,0 +1,1 @@
+std::iter::FlatMap<TupleWindows<std::slice::Iter<'_, (u32, u32)>, (&(u32, u32), &(u32, u32))>, itertools::Product<RangeInclusive<u32>, RangeInclusive<&u32>>, [closure@src/lib.rs:18:19: 18:41]>

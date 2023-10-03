@@ -1,0 +1,1 @@
+fn(_) -> Result<(_, u64), nom::Err<_>> {nom::character::complete::u64::<_, _>}
