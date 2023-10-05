@@ -1,332 +1,166 @@
-use std::{
-    collections::{BTreeMap, HashSet},
-    fmt::Display,
-};
-
-use glam::IVec3;
 use itertools::Itertools;
 use nom::{
     branch::alt,
-    bytes::complete::tag,
-    character::complete::{self, line_ending},
-    multi::{many1, separated_list1},
-    sequence::{delimited, separated_pair},
-    IResult, Parser,
+    character::complete,
+    character::complete::line_ending,
+    combinator::{eof, iterator},
+    multi::separated_list1,
+    sequence::terminated,
+    *,
 };
-use rayon::prelude::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
+// tracing is a crate that allows us to do logging in a structured way
+use tracing::*;
+// tracing_subscriber is a crate that allows us to configure how tracing works
+use tracing_subscriber;
 
-// enum Minerals {
-//     Ore,
-//     Clay,
-//     Obsidian,
-//     Geode,
-// }
+#[instrument(skip(input))]
+// using i64 because we need to be able to represent negative numbers
+fn numbers(input: &str) -> IResult<&str, Vec<(usize, i64)>> {
+    // Creates an iterator from input data and a parser
+    // we do it with an input and a parser of terminated()
+    // terminated() is a combinator that runs a parser and then another one, and returns the result of the first one
+    // eof() returns its input if it is at the end of input data; When we're at the end of the data, this combinator will succeed
+    let mut it = iterator(input, terminated(complete::i64, alt((line_ending, eof))));
 
-#[derive(Debug)]
-struct ObsidianRequirements {
-    ore: usize,
-    clay: usize,
+    // .enumerate() Creates an iterator which gives the current index as well as the element.
+    let numbers = it.enumerate().collect::<Vec<_>>();
+    // info!(?numbers) is a macro that logs the value of numbers. we need ? because numbers is a Vec<_> and we need to implement Debug for it
+    info!(?numbers);
+    // .finish() Returns the remaining input if parsing was successful, or the error if we encountered an error.
+    let (input, _) = it.finish()?;
+    Ok((input, numbers))
 }
 
-#[derive(Debug)]
-struct GeodeRequirements {
-    ore: usize,
-    obsidian: usize,
-}
-
-#[derive(Debug)]
-struct Blueprint {
-    id: usize,
-    ore: usize,
-    clay: usize,
-    obsidian: ObsidianRequirements,
-    geode: GeodeRequirements,
-}
-
-// this parses the input for the blueprint part
-// this is different from fn blueprints because this parses the input for a single blueprint, while fn blueprints parses the input for multiple blueprints
-fn blueprint(input: &str) -> IResult<&str, Blueprint> {
-    // this parses the id of the blueprint
-    let (input, id) = delimited(tag("Blueprint "), complete::u64, tag(":"))(input)?;
-    // this parses the ore cost of the blueprint
-    let (input, ore) =
-        delimited(tag(" Each ore robot costs "), complete::u64, tag(" ore."))(input)?;
-    // this parses the clay cost of the blueprint
-    let (input, clay) =
-        delimited(tag(" Each clay robot costs "), complete::u64, tag(" ore."))(input)?;
-    // this parses the obsidian cost of the blueprint
-    let (input, obsidian) = delimited(
-        tag(" Each obsidian robot costs "),
-        separated_pair(complete::u64, tag(" ore and "), complete::u64).map(|pair| {
-            ObsidianRequirements {
-                ore: pair.0 as usize,
-                clay: pair.1 as usize,
-            }
-        }),
-        tag(" clay."),
-    )(input)?;
-    // this parses the geode cost of the blueprint
-    let (input, geode) = delimited(
-        tag(" Each geode robot costs "),
-        separated_pair(complete::u64, tag(" ore and "), complete::u64).map(|pair| {
-            GeodeRequirements {
-                ore: pair.0 as usize,
-                obsidian: pair.1 as usize,
-            }
-        }),
-        tag(" obsidian."),
-    )(input)?;
-    // if successful, return the blueprint
-    Ok((
-        input,
-        Blueprint {
-            id: id as usize,
-            ore: ore as usize,
-            clay: clay as usize,
-            obsidian,
-            geode,
-        },
-    ))
-}
-
-fn blueprints(input: &str) -> IResult<&str, Vec<Blueprint>> {
-    separated_list1(line_ending, blueprint)(input)
-}
-
-#[derive(Debug, Clone)]
-struct Resources {
-    ore: usize,
-    clay: usize,
-    obsidian: usize,
-    geode: usize,
-    ore_bots: usize,
-    clay_bots: usize,
-    obsidian_bots: usize,
-    geode_bots: usize,
-}
-
-// this implementation has the functions for the Resources struct that allows it to try to build the geode, obsidian, clay, or ore
-impl Resources {
-    fn run(&mut self) {
-        self.ore += self.ore_bots;
-        self.clay += self.clay_bots;
-        self.obsidian += self.obsidian_bots;
-        self.geode += self.geode_bots;
-    }
-    // the resources required to build the geode
-    fn try_build_geode(&self, blueprint: &Blueprint) -> Option<Resources> {
-        if self.ore >= blueprint.geode.ore && self.obsidian >= blueprint.geode.obsidian {
-            let mut new_resources = self.clone();
-            new_resources.ore -= blueprint.geode.ore;
-            new_resources.obsidian -= blueprint.geode.obsidian;
-            new_resources.run();
-            new_resources.geode_bots += 1;
-            Some(new_resources)
-        } else {
-            None
-        }
-    }
-    // the resources required to build the obsidian
-    fn try_build_obsidian(&self, blueprint: &Blueprint) -> Option<Resources> {
-        if self.ore >= blueprint.obsidian.ore
-            && self.clay >= blueprint.obsidian.clay
-            && self.obsidian_bots < blueprint.geode.obsidian
-        {
-            let mut new_resources = self.clone();
-            new_resources.ore -= blueprint.obsidian.ore;
-            new_resources.clay -= blueprint.obsidian.clay;
-            new_resources.run();
-            new_resources.obsidian_bots += 1;
-            Some(new_resources)
-        } else {
-            None
-        }
-    }
-    fn try_build_clay(&self, blueprint: &Blueprint) -> Option<Resources> {
-        if self.ore >= blueprint.clay && self.clay_bots < blueprint.obsidian.clay {
-            let mut new_resources = self.clone();
-            new_resources.ore -= blueprint.clay;
-            new_resources.run();
-            new_resources.clay_bots += 1;
-            Some(new_resources)
-        } else {
-            // println!(
-            //     "couldn't buy obsidian requiring {:?}\n with,\n {:?}",
-            //     blueprint.obsidian, self
-            // );
-            None
-        }
-    }
-    // the resources required to build the ore
-    fn try_build_ore(&self, blueprint: &Blueprint) -> Option<Resources> {
-        if self.ore >= blueprint.ore
-            && self.ore_bots
-                < blueprint
-                    .clay
-                    .max(blueprint.obsidian.ore)
-                    .max(blueprint.geode.ore)
-        {
-            let mut new_resources = self.clone();
-            new_resources.ore -= blueprint.ore;
-            new_resources.run();
-            new_resources.ore_bots += 1;
-            Some(new_resources)
-        } else {
-            None
-        }
-    }
-}
-
-// implementation for the Resources struct that allows the initial resources to be set with 1 (the ore bot) or the default function, which is the default value of 0
-impl Default for Resources {
-    fn default() -> Self {
-        Self {
-            ore: Default::default(),
-            clay: Default::default(),
-            obsidian: Default::default(),
-            geode: Default::default(),
-            // ore_bots is 1 because we start with 1 ore bot to kcikstart the whole operation
-            ore_bots: 1,
-            clay_bots: Default::default(),
-            obsidian_bots: Default::default(),
-            geode_bots: Default::default(),
-        }
-    }
-}
-
-// step_blueprint is a function that takes a blueprint, resources, and time_left, and returns a vector of resources that are the result of the blueprint being stepped (or run) for the given time_left
-// takes in the Blueprint, Resources, and usize (time_left) and returns a vector of Resources that are the result of the blueprint being stepped (or run) for the given time_left
-fn step_blueprint(blueprint: &Blueprint, resources: Resources, time_left: usize) -> Vec<Resources> {
-    // if there is time left, then we can build, collect, and get new bots
-    // the time_left.checked_sub(1) is the time_left minus 1, and if it is greater than 0, then we can build, collect, and get new bots
-    // Checked integer subtraction. Computes self - rhs, returning None if overflow or underflow occurred.
-    if let Some(time_left) = time_left.checked_sub(1) {
-        // build, collect plus new bots
-        let new_resources = match (
-            resources.try_build_geode(blueprint),
-            resources.try_build_obsidian(blueprint),
-            resources.try_build_clay(blueprint),
-        ) {
-            // the .. means that the rest of the tuple is ignored because we only care about the first couple of values
-            // this returns the resources if the resources are built in the order of geode, obsidian, and clay
-            // the values will either be None or Some Vec of Resources
-            // this adds the resources to the vector if the resources are built in the order of geode, obsidian, and clay
-            // the vector comes from the resources.try_build_geode(blueprint) function
-            // it's in the order (geode, obsidian, clay)
-            (Some(resources), ..) =>
-            // println!("Bought geode");
-            {
-                Some(resources)
-            }
-            // this returns the resources if the resources are built in the order of obsidian and clay
-            (None, Some(resources), ..) =>
-            // println!("Bought obsidian");
-            {
-                Some(resources)
-            }
-            // this returns the resources if the resources are built in the order of clay
-            (None, None, Some(resources)) =>
-            // println!("Bought clay");
-            {
-                Some(resources)
-            }
-            _ => None,
-        };
-        [
-            // this tries to build the ore with the resources and then runs the blueprint with the new resources and time_left
-            // we use brackets to make it an array so that we can use the .into_iter() function
-            resources
-                .try_build_ore(blueprint)
-                .map(|new_resources| step_blueprint(blueprint, new_resources, time_left)),
-            new_resources.map(|new_resources| step_blueprint(blueprint, new_resources, time_left)),
-            Some(step_blueprint(
-                blueprint,
-                {
-                    let mut new_resources = resources.clone();
-                    new_resources.run();
-                    new_resources
-                },
-                time_left,
-            )),
-        ]
-        .into_iter()
-        .filter_map(|v| v)
-        .flatten()
-        .collect()
-    } else {
-        // if there is no time left, then we can't build, collect, or get new bots
-        vec![resources]
-        // done
-    }
-}
-
-// in process_part1, we parse the input, and then we step the blueprint for 24 hours, and then we get the maximum geode value
+#[instrument(skip(input))]
 pub fn process_part1(input: &str) -> String {
-    let (_, blueprints) = blueprints(input).unwrap();
-    let maxes: usize = blueprints
-    // using par_iter from the rayon crate, we can parallelize the iteration
-    // how it works is that it splits the iterator into chunks, and then it runs each chunk in parallel (it's used just like the normal iter function)
-    // it's worth parallelizing what we can
-        .par_iter()
-        .enumerate()
-        .map(|(i, blueprint)| {
-            // dbg!(blueprint);
-            let max = step_blueprint(&blueprint, Resources::default(), 24)
-                .iter()
-                .map(|v| v.geode)
-                .max()
-                .unwrap();
-            // dbg!(result);
-            let max = (i + 1) * max;
-            println!("{i}:{}", max);
-            max
-        })
-        .sum::<usize>();
-    maxes.to_string()
+    let (_, numbers) = numbers(input).unwrap();
+    // we clone numbers because we need to be able to mutate it
+    let mut state = numbers.clone();
+    // we get the state of the numbers, which is a vector of tuples of (index, value)
+    info!(?state);
+    // For each id and value in numbers, we log the value
+    // Then we find the position in 'state' where the first element of the tuple (the id) matches the current 'id' from 'numbers'
+    // We assign this position to 'index' and unwrap it to get the value from the Option returned by 'position()'
+    // this assumes no duplicate ids
+    for (id, value) in numbers.iter() {
+        info!(?value, "moving");
+        let index = state
+            .iter()
+            .position(|state_value| state_value.0 == *id)
+            .unwrap();
+
+        // we remove the value at the index to get the current value
+        let current = state.remove(index);
+        // we assign added as the index + the current value
+        // we use .1 instead of .0 because we want the value, not the index
+        let added = index as i64 + current.1;
+        // we get the new index by doing a modulo of the length of the state (Calculates the least nonnegative remainder of self (mod rhs).)
+        // The .rem_euclid() function in Rust calculates the least nonnegative remainder of self (mod rhs). This is equivalent to the % operator in many languages, but it always returns a positive number, even when one of the operands is negative.
+        let new_index = added.rem_euclid(state.len() as i64);
+
+        // we log the index and the new index
+        info!(index, new_index);
+
+        // we insert the current value at the new index
+        state.insert(new_index as usize, current);
+
+        // we log the state
+        info!("{:?}", state.iter().map(|v| v.1).collect::<Vec<_>>());
+    }
+    // assign zero_pos as the position of the value 0 in the state
+    let zero_pos = state.iter().position(|v| v.1 == 0).unwrap();
+    // assign a, b, and c as the values at the positions 1000, 2000, and 3000 from the zero_pos
+    // we add 1000, 2000, and 3000 to zero_pos to get the positions
+    // we use % to get the remainder of the division by the length of the state; which we use because we want to wrap around the state
+    let a = state[(1000 + zero_pos) % state.len()].1;
+    let b = state[(2000 + zero_pos) % state.len()].1;
+    let c = state[(3000 + zero_pos) % state.len()].1;
+    // we log a, b, c, and "ABC", the values we need to return which are the values at the positions 1000, 2000, and 3000 from the zero_pos
+    info!(a, b, c, "ABC");
+    // we return the sum of a, b, and c as a string
+    (a + b + c).to_string()
 }
 
-// for the second part, we need to find the maximum number of geodes that can be produced in 24 hours
-// we don't have to worry about the quality levels. We just worry about the first three blueprints, determine the largest number of geodes you could open; then, multiply these three values together.
 pub fn process_part2(input: &str) -> String {
-    let (_, blueprints) = blueprints(input).unwrap();
-    let maxes: usize = blueprints[0..3]
-        .iter()
-        .enumerate()
-        .map(|(i, blueprint)| {
-            let max = step_blueprint(
-                &blueprint,
-                Resources::default(),
-                32, // minutes
-            )
-            .iter()
-            .map(|v| v.geode)
-            .max()
-            .unwrap();
-            // dbg!(result);
-            println!("{i}:{}", max);
-            max
-        })
-        .product::<usize>();
-    maxes.to_string()
+    let (_, mut numbers) = numbers(input).unwrap();
+
+    // need to multiply the values by 811589153 for part 2
+    numbers.iter_mut().for_each(|tuple| tuple.1 *= 811589153);
+
+    // we clone numbers because we need to be able to mutate it
+    let mut state = numbers.clone();
+    // we get the state of the numbers, which is a vector of tuples of (index, value)
+    info!(?state);
+    // For each id and value in numbers, we log the value
+    // Then we find the position in 'state' where the first element of the tuple (the id) matches the current 'id' from 'numbers'
+    // We assign this position to 'index' and unwrap it to get the value from the Option returned by 'position()'
+    // this assumes no duplicate ids
+    for _ in 0..10 {
+        for (id, value) in numbers.iter() {
+            info!(?value, "moving");
+            let index = state
+                .iter()
+                .position(|state_value| state_value.0 == *id)
+                .unwrap();
+
+            // we remove the value at the index to get the current value
+            let current = state.remove(index);
+            // we assign added as the index + the current value
+            // we use .1 instead of .0 because we want the value, not the index
+            let added = index as i64 + current.1;
+            // we get the new index by doing a modulo of the length of the state (Calculates the least nonnegative remainder of self (mod rhs).)
+            // The .rem_euclid() function in Rust calculates the least nonnegative remainder of self (mod rhs). This is equivalent to the % operator in many languages, but it always returns a positive number, even when one of the operands is negative.
+            let new_index = added.rem_euclid(state.len() as i64);
+
+            // we log the index and the new index
+            info!(index, new_index);
+
+            // we insert the current value at the new index
+            state.insert(new_index as usize, current);
+
+            // we log the state
+            info!("{:?}", state.iter().map(|v| v.1).collect::<Vec<_>>());
+        }
+    }
+    // assign zero_pos as the position of the value 0 in the state
+    let zero_pos = state.iter().position(|v| v.1 == 0).unwrap();
+    // assign a, b, and c as the values at the positions 1000, 2000, and 3000 from the zero_pos
+    // we add 1000, 2000, and 3000 to zero_pos to get the positions
+    // we use % to get the remainder of the division by the length of the state; which we use because we want to wrap around the state
+    let a = state[(1000 + zero_pos) % state.len()].1;
+    let b = state[(2000 + zero_pos) % state.len()].1;
+    let c = state[(3000 + zero_pos) % state.len()].1;
+    // we log a, b, c, and "ABC", the values we need to return which are the values at the positions 1000, 2000, and 3000 from the zero_pos
+    info!(a, b, c, "ABC");
+    // we return the sum of a, b, and c as a string
+    (a + b + c).to_string()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    const INPUT: &str = "Blueprint 1: Each ore robot costs 4 ore. Each clay robot costs 2 ore. Each obsidian robot costs 3 ore and 14 clay. Each geode robot costs 2 ore and 7 obsidian.
-Blueprint 2: Each ore robot costs 2 ore. Each clay robot costs 3 ore. Each obsidian robot costs 3 ore and 8 clay. Each geode robot costs 3 ore and 12 obsidian.";
+    const INPUT: &str = "1
+2
+-3
+3
+-2
+0
+4";
 
+    // we use ignore here becuase you can instantiate with a global subscriber only once (talking here about tracing_subscriber::fmt::init();
     #[test]
+    #[ignore]
     fn part1_works() {
-        assert_eq!(process_part1(INPUT), "33");
+        tracing_subscriber::fmt::init();
+        assert_eq!(process_part1(INPUT), "3");
     }
 
     #[test]
     fn part2_works() {
-        assert_eq!(
-            process_part2(INPUT),
-            (62 * 56).to_string()
-        );
+        tracing_subscriber::fmt::init();
+        assert_eq!(process_part2(INPUT), "1623178306");
     }
 }
+
+// try RUST_LOG="" cargo run --bin part-1 or RUST_LOG="" cargo run --bin part-2 to run the code without logging
