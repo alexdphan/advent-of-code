@@ -1,0 +1,1 @@
+&std::iter::FlatMap<std::slice::Iter<'_, Node<'_>>, Vec<(&str, &str)>, [closure@src/lib.rs:92:39: 92:45]>
