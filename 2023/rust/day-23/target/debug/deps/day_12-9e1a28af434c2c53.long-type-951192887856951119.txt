@@ -1,0 +1,1 @@
+std::iter::FlatMap<Enumerate<std::slice::Iter<'_, Vec<char>>>, (usize, &Vec<char>), [closure@src/lib.rs:37:49: 37:52]>

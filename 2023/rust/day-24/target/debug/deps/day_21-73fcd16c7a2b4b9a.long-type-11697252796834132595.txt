@@ -1,0 +1,1 @@
+std::iter::Map<itertools::Product<RangeInclusive<i32>, RangeInclusive<i32>>, [closure@src/lib.rs:120:14: 120:22]>

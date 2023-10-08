@@ -1,0 +1,1 @@
+(fn(_) -> Result<(_, _), nom::Err<_>> {nom::character::complete::line_ending::<_, _>}, fn(_) -> Result<(_, _), nom::Err<_>> {eof::<_, _>})

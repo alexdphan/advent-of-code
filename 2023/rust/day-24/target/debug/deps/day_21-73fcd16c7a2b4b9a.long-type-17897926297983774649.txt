@@ -1,0 +1,1 @@
+(for<'a> fn(&'a str) -> Result<(&'a str, BTreeMap<&'a str, ()>), nom::Err<nom::error::Error<&'a str>>> {nodes}, GraphMap<&str, (), Directed>)
